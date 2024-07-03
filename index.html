@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Family Tree</title>
+    <style>
+        .node {
+            cursor: pointer;
+        }
+
+        .node circle {
+            fill: lightsteelblue;
+            stroke: steelblue;
+            stroke-width: 3px;
+        }
+
+        .node text {
+            font: 10px sans-serif;
+            fill: black;
+            text-anchor: middle;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        #search-container {
+            margin-bottom: 20px;
+        }
+
+        #search-input {
+            width: 300px;
+            padding: 8px;
+            font-size: 16px;
+        }
+
+        #search-results {
+            border: 1px solid #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: white;
+            display: none;
+            position: absolute;
+            width: 300px;
+        }
+
+        #search-results div {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        #search-results div:hover {
+            background-color: #f0f0f0;
+        }
+
+        #tree-container {
+            width: 100vw;
+            height: 100vh;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Family Tree</h1>
+    <div id="search-container">
+        <input type="text" id="search-input" placeholder="Search for an individual...">
+        <div id="search-results"></div>
+    </div>
+    <div id="tree-container">
+        <svg></svg>
+    </div>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        let individuals = {}; // This will store the individual data
+
+        // Load the individual data
+        d3.json("individuals_data.json").then(function(data) {
+            individuals = data;
+
+            // Search logic
+            const searchInput = document.getElementById('search-input');
+            const searchResults = document.getElementById('search-results');
+
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase();
+                searchResults.innerHTML = '';
+                if (query) {
+                    const matches = Object.keys(individuals).filter(key => individuals[key].name.toLowerCase().includes(query));
+                    if (matches.length > 0) {
+                        searchResults.style.display = 'block';
+                        matches.forEach(match => {
+                            const resultDiv = document.createElement('div');
+                            resultDiv.textContent = individuals[match].name;
+                            resultDiv.addEventListener('click', () => {
+                                searchInput.value = individuals[match].name;
+                                searchResults.style.display = 'none';
+                                loadTree(individuals[match]);
+                            });
+                            searchResults.appendChild(resultDiv);
+                        });
+                    } else {
+                        searchResults.style.display = 'none';
+                    }
+                } else {
+                    searchResults.style.display = 'none';
+                }
+            });
+        }).catch(function(error) {
+            console.error("Error loading individual data:", error);
+        });
+
+        function loadTree(individual) {
+            d3.select("svg").selectAll("*").remove(); // Clear existing tree
+
+            const container = document.getElementById('tree-container');
+            const width = container.clientWidth;
+            const height = 2000; // Increased for more vertical space
+
+            const margin = { top: 20, right: 90, bottom: 30, left: 90 },
+                innerWidth = width - margin.left - margin.right,
+                innerHeight = height - margin.top - margin.bottom;
+
+            let i = 0,
+                duration = 750,
+                root;
+
+            const treemap = d3.tree().size([innerWidth, innerHeight]); // Switch width and height for horizontal layout
+
+            const svg = d3.select("svg")
+                .attr("width", innerWidth + margin.left + margin.right)
+                .attr("height", innerHeight + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            root = d3.hierarchy(individual, function(d) {
+                return d.children ? d.children.map(childPointer => individuals[childPointer]) : null;
+            });
+            root.x0 = innerWidth / 2;
+            root.y0 = innerHeight;
+
+            update(root);
+
+            function update(source) {
+                const treeData = treemap(root);
+
+                const nodes = treeData.descendants(),
+                    links = treeData.descendants().slice(1);
+
+                nodes.forEach(d => d.y = innerHeight - d.depth * 180); // Adjusting positions
+
+                const node = svg.selectAll('g.node')
+                    .data(nodes, d => d.id || (d.id = ++i));
+
+                const nodeEnter = node.enter().append('g')
+                    .attr('class', 'node')
+                    .attr('transform', d => `translate(${source.x0},${source.y0})`)
+                    .on('click', click);
+
+                nodeEnter.append('circle')
+                    .attr('class', 'node')
+                    .attr('r', 1e-6)
+                    .style("fill", d => d._children ? "lightsteelblue" : "#fff");
+
+                nodeEnter.append('text')
+                    .attr("dy", ".35em")
+                    .text(d => d.data.name);
+
+                const nodeUpdate = nodeEnter.merge(node);
+
+                nodeUpdate.transition()
+                    .duration(duration)
+                    .attr('transform', d => `translate(${d.x},${d.y})`);
+
+                nodeUpdate.select('circle.node')
+                    .attr('r', 50) // Large enough to fit longer names
+                    .style("fill", d => d._children ? "lightsteelblue" : "#fff")
+                    .attr('cursor', 'pointer');
+
+                const nodeExit = node.exit().transition()
+                    .duration(duration)
+                    .attr('transform', d => `translate(${source.x},${source.y})`)
+                    .remove();
+
+                nodeExit.select('circle')
+                    .attr('r', 1e-6);
+
+                nodeExit.select('text')
+                    .style('fill-opacity', 1e-6);
+
+                const link = svg.selectAll('path.link')
+                    .data(links, d => d.id);
+
+                const linkEnter = link.enter().insert('path', "g")
+                    .attr("class", "link")
+                    .attr('d', d => {
+                        const o = { x: source.x0, y: source.y0 };
+                        return diagonal(o, o);
+                    });
+
+                const linkUpdate = linkEnter.merge(link);
+
+                linkUpdate.transition()
+                    .duration(duration)
+                    .attr('d', d => diagonal(d, d.parent));
+
+                const linkExit = link.exit().transition()
+                    .duration(duration)
+                    .attr('d', d => {
+                        const o = { x: source.x, y: source.y };
+                        return diagonal(o, o);
+                    })
+                    .remove();
+
+                nodes.forEach(d => {
+                    d.x0 = d.x;
+                    d.y0 = d.y;
+                });
+
+                function diagonal(s, d) {
+                    const path = `M ${s.x} ${s.y}
+                                  C ${(s.x + d.x) / 2} ${s.y},
+                                    ${(s.x + d.x) / 2} ${d.y},
+                                    ${d.x} ${d.y}`;
+                    return path;
+                }
+
+                function click(event, d) {
+                    if (d.children) {
+                        d._children = d.children;
+                        d.children = null;
+                    } else {
+                        d.children = d._children;
+                        d._children = null;
+                    }
+                    update(d);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
