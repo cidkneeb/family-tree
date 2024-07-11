@@ -8,9 +8,9 @@
             cursor: pointer;
         }
 
-        .node circle {
-            fill: lightsteelblue;
-            stroke: steelblue;
+        .node ellipse {
+            fill: rgb(105, 172, 137);
+            stroke: rgb(15, 137, 62);
             stroke-width: 3px;
         }
 
@@ -22,7 +22,7 @@
 
         .link {
             fill: none;
-            stroke: #ccc;
+            stroke: #662700;
             stroke-width: 2px;
         }
 
@@ -147,7 +147,7 @@
                     links = treeData.descendants().slice(1);
 
                 // Adjust horizontal spacing (increase multiplier for more spacing)
-                nodes.forEach(d => d.y = d.depth * 200);
+                nodes.forEach(d => d.y = d.depth * 150);
                 nodes.forEach(d => d.x = d.x * 1.85);
 
                 const node = svg.selectAll('g.node')
@@ -165,7 +165,7 @@
                     .attr('ry', 30) // Set vertical radius
                     .attr('cx', 0)
                     .attr('cy', 0)
-                    .style("fill", d => d._children ? "lightsteelblue" : "#fff");
+                    .style("fill", d => d._children ? "lightgreen" : "#fff");
 
                 nodeEnter.append('text')
                     .attr("dy", ".35em")
@@ -187,9 +187,11 @@
                     .duration(duration)
                     .attr('transform', d => `translate(${d.y},${d.x})`);
 
-                nodeUpdate.select('circle.node')
+                nodeUpdate.select('ellipse.node')
                     .attr('r', 20) // Increase circle radius
-                    .style("fill", d => d._children ? "lightsteelblue" : "#fff")
+                    .attr('rx', 35) // Set horizontal radius
+                    .attr('ry', 30) // Set vertical radius
+                    .style("fill", d => d._children ? "lightgreen" : "#fff")
                     .attr('cursor', 'pointer');
 
                 const nodeExit = node.exit().transition()
